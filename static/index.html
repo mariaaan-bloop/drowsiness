@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<title>Demo Deteksi Kantuk (Realtime)</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 24px auto; padding: 0 16px; }
+  video, canvas { width: 100%; border-radius: 8px; background: #000; }
+  #status { font-size: 1.2rem; font-weight: 600; padding: 12px; border-radius: 8px; margin-top: 12px; }
+  .ok { background: #e6f6ea; color: #1a7a34; }
+  .alert { background: #fdeaea; color: #c62828; }
+  .waiting { background: #f0f0f0; color: #555; }
+  #bar { height: 10px; background: #eee; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+  #barFill { height: 100%; background: #e74c3c; width: 0%; transition: width 0.2s; }
+</style>
+</head>
+<body>
+  <h2>🚗 Demo Deteksi Kantuk — Realtime</h2>
+  <p>Frontend statis ini <b>tidak bergantung Colab/Gradio</b> -- langsung memanggil backend
+  FastAPI (lihat <code>server.py</code>). Izinkan akses kamera, lalu tunggu buffer terisi.</p>
+
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas" style="display:none"></canvas>
+
+  <div id="status" class="waiting">Menunggu izin kamera...</div>
+  <div id="bar"><div id="barFill"></div></div>
+  <audio id="beep" src="/alert.wav" preload="auto"></audio>
+
+  <p style="margin-top:16px">
+    <label>API base URL: <input id="apiBase" value="" style="width:220px" placeholder="(kosong = origin yang sama)"></label>
+  </p>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const statusEl = document.getElementById("status");
+    const barFill = document.getElementById("barFill");
+    const beep = document.getElementById("beep");
+    const apiBaseInput = document.getElementById("apiBase");
+
+    const sessionId = "web-" + Math.random().toString(36).slice(2);
+    const SEND_INTERVAL_MS = 200; // seberapa sering frame dikirim ke server (server sendiri yang
+                                    // menentukan seberapa sering model benar-benar dijalankan)
+
+    function apiUrl(path) {
+      const base = apiBaseInput.value.trim().replace(/\/$/, "");
+      return (base || "") + path;
+    }
+
+    async function start() {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      await new Promise(r => video.onloadedmetadata = r);
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      statusEl.textContent = "Mengisi buffer...";
+      setInterval(sendFrame, SEND_INTERVAL_MS);
+    }
+
+    async function sendFrame() {
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        const form = new FormData();
+        form.append("file", blob, "frame.jpg");
+        try {
+          const res = await fetch(apiUrl(`/session/${sessionId}/frame`), { method: "POST", body: form });
+          if (!res.ok) return;
+          const data = await res.json();
+          render(data);
+        } catch (e) {
+          statusEl.textContent = "Tidak bisa menghubungi backend (" + e + ")";
+          statusEl.className = "waiting";
+        }
+      }, "image/jpeg", 0.8);
+    }
+
+    function render(data) {
+      const pct = Math.round((data.ngantuk_probability || 0) * 100);
+      barFill.style.width = pct + "%";
+
+      if (!data.buffer_filled) {
+        statusEl.textContent = `Mengisi buffer... (${data.buffer_size}/${data.buffer_capacity})`;
+        statusEl.className = "waiting";
+        return;
+      }
+      if (data.is_alert) {
+        statusEl.textContent = `🚨 ALERT: NGANTUK TERDETEKSI (${pct}%)`;
+        statusEl.className = "alert";
+      } else {
+        statusEl.textContent = `Aman (${pct}% ngantuk, hit beruntun ${data.consecutive_hits}/${data.alert_consecutive_hits_needed})`;
+        statusEl.className = "ok";
+      }
+      if (data.alert_rising_edge) {
+        beep.currentTime = 0;
+        beep.play().catch(() => {});
+      }
+    }
+
+    start().catch(err => {
+      statusEl.textContent = "Gagal akses kamera: " + err;
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "classes": [
+    "Tidak Ngantuk",
+    "Ngantuk"
+  ],
+  "class_to_id": {
+    "Tidak Ngantuk": 0,
+    "Ngantuk": 1
+  },
+  "seq_len": 24,
+  "img_size": 128,
+  "face_margin": 0.35,
+  "min_detection_confidence": 0.5,
+  "num_landmark_features": 4,
+  "num_summary_features": 6,
+  "use_summary_branch": true,
+  "use_audio_branch": false,
+  "num_audio_features": 0,
+  "tta_windows": 3,
+  "alert_threshold": 0.5,
+  "alert_consecutive_hits": 3,
+  "inference_interval_sec": 1.0,
+  "checkpoint_selection": "macro_f1 (fine-tuned)",
+  "test_macro_f1": 0.9442970822281167,
+  "kfold_macro_f1_mean": null,
+  "kfold_macro_f1_std": null,
+  "exported_at": "2026-09-12T12:36:43.795193+00:00",
+  "notebook_version": "v11"
+}
